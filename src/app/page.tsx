@@ -1,57 +1,42 @@
-import { Stars } from "@/components/Stars";
-import { WaitlistForm } from "@/components/WaitlistForm";
+import Link from "next/link";
 
 export default function Home() {
   return (
-    <main className="relative z-10 min-h-screen overflow-hidden">
-      <Stars />
+    <main className="mx-auto flex min-h-screen w-full max-w-md flex-col px-6 pt-10 sm:pt-14">
+      <header className="float-in float-in-1 flex items-center justify-between">
+        <span className="text-sm tracking-tight text-paper">halostar</span>
+        <span className="label-meta">mumbai</span>
+      </header>
 
-      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-5xl flex-col px-6 pt-10 sm:px-10 sm:pt-14">
-        <header className="float-in float-in-1 flex items-center justify-between">
-          <span className="font-display text-2xl italic tracking-tight text-cream">
-            halostar
-          </span>
-          <span className="hidden text-xs uppercase tracking-[0.25em] text-cream-faint sm:block">
-            est. mumbai
-          </span>
-        </header>
+      <section className="flex flex-1 flex-col justify-center py-24">
+        <h1 className="float-in float-in-2 serif-italic text-[44px] leading-[1.02] tracking-[-0.025em] text-paper sm:text-[60px]">
+          vedic astrology,
+          <br />
+          in your voice.
+        </h1>
 
-        <section className="flex flex-1 flex-col justify-center py-16 sm:py-24">
-          <p className="float-in float-in-1 mb-6 text-xs uppercase tracking-[0.3em] text-cream-muted">
-            <span className="text-saffron">✦</span>&nbsp; coming soon
-          </p>
+        <p className="float-in float-in-3 mt-10 max-w-sm text-base leading-[1.55] text-paper-muted">
+          real nakshatras, real dashas, real gochar. delivered the way you
+          actually talk.
+        </p>
 
-          <h1 className="float-in float-in-2 max-w-3xl font-display text-5xl leading-[1.05] tracking-tight sm:text-6xl md:text-7xl">
-            <span className="italic text-gradient-warm">vedic astrology</span>
-            <br />
-            <span className="text-cream">in your actual voice.</span>
-          </h1>
+        <div className="float-in float-in-4 mt-14">
+          <Link
+            href="/vibe"
+            className="
+              group inline-flex items-center gap-2 text-base text-paper
+              transition hover:text-paper/80
+            "
+          >
+            <span>read today&rsquo;s horoscope</span>
+            <span className="transition-transform group-hover:translate-x-1">→</span>
+          </Link>
+        </div>
+      </section>
 
-          <p className="float-in float-in-3 mt-8 max-w-xl text-lg leading-relaxed text-cream-muted sm:text-xl">
-            nakshatra, dasha, gochar — the whole cosmic group chat, decoded in
-            the way you already talk. no aunty whatsapp forwards, no fluff.
-            just real readings that hit.
-          </p>
-
-          <div className="float-in float-in-4">
-            <WaitlistForm />
-          </div>
-
-          <p className="float-in float-in-5 mt-6 max-w-md text-sm text-cream-faint">
-            first 1,000 inboxes get free access on launch day. mercury&rsquo;s
-            keeping receipts.
-          </p>
-        </section>
-
-        <footer className="float-in float-in-5 pb-8 text-xs text-cream-faint">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <span>© halostar — built in mumbai, written in the stars.</span>
-            <span className="font-display italic text-cream-muted">
-              &ldquo;the universe&rsquo;s in your group chat now.&rdquo;
-            </span>
-          </div>
-        </footer>
-      </div>
+      <footer className="float-in float-in-5 py-8">
+        <span className="label-meta">© halostar</span>
+      </footer>
     </main>
   );
 }

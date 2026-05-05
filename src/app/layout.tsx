@@ -18,12 +18,11 @@ const manrope = Manrope({
 export const metadata: Metadata = {
   title: "halostar — vedic astrology in your voice",
   description:
-    "vedic astrology for the way you actually talk. nakshatra, dasha, tithi — none of the aunty whatsapp forward energy. coming soon.",
+    "real vedic astrology — nakshatra, dasha, gochar — in the way you actually talk. mumbai gen z, no aunty whatsapp forwards.",
   metadataBase: new URL("https://halostar.in"),
   openGraph: {
     title: "halostar — vedic astrology in your voice",
-    description:
-      "vedic astrology for the way you actually talk. coming soon.",
+    description: "real vedic astrology in the way you actually talk.",
     url: "https://halostar.in",
     siteName: "halostar",
     locale: "en_IN",
@@ -32,24 +31,17 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "halostar — vedic astrology in your voice",
-    description:
-      "vedic astrology for the way you actually talk. coming soon.",
+    description: "real vedic astrology in the way you actually talk.",
   },
-  icons: {
-    icon: "/favicon.ico",
-  },
+  icons: { icon: "/favicon.ico" },
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
-      <body className={`${fraunces.variable} ${manrope.variable} antialiased`}>
-        {children}
-      </body>
+    <html lang="en" className={`${fraunces.variable} ${manrope.variable}`}>
+      <body className="antialiased">{children}</body>
     </html>
   );
 }

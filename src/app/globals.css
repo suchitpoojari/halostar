@@ -1,17 +1,72 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * halostar — co-star aesthetic, hard mode.
+ * pure black background, off-white text. zero color. zero decoration.
+ * sans-serif body. serif italic ONLY for the one moment of drama per screen.
+ */
 
 @theme inline {
-  --color-aubergine-deep: #1a0e2e;
-  --color-aubergine: #2a1648;
-  --color-saffron: #ff6b35;
-  --color-magenta: #ff3d8b;
-  --color-gold: #ffc857;
-  --color-cream: #fef3e2;
-  --color-cream-muted: rgba(254, 243, 226, 0.7);
-  --color-cream-faint: rgba(254, 243, 226, 0.45);
+  --color-ink: #0a0a0a;
+  --color-paper: #f5f3ee;
+  --color-paper-muted: rgba(245, 243, 238, 0.55);
+  --color-paper-faint: rgba(245, 243, 238, 0.32);
+  --color-paper-ghost: rgba(245, 243, 238, 0.15);
+  --color-line: rgba(245, 243, 238, 0.08);
+  --color-line-strong: rgba(245, 243, 238, 0.16);
 
-  --font-display: var(--font-fraunces), Georgia, serif;
-  --font-body: var(--font-manrope), system-ui, sans-serif;
+  --font-display: var(--font-fraunces), "Cormorant Garamond", Georgia, serif;
+  --font-sans: var(--font-manrope), -apple-system, "SF Pro Text", system-ui, sans-serif;
+
+  /* shadcn token map → mono palette */
+  --color-background: var(--color-ink);
+  --color-foreground: var(--color-paper);
+  --color-card: var(--color-ink);
+  --color-card-foreground: var(--color-paper);
+  --color-popover: #141414;
+  --color-popover-foreground: var(--color-paper);
+  --color-primary: var(--color-paper);
+  --color-primary-foreground: var(--color-ink);
+  --color-secondary: #141414;
+  --color-secondary-foreground: var(--color-paper);
+  --color-muted: #141414;
+  --color-muted-foreground: var(--color-paper-muted);
+  --color-accent: #141414;
+  --color-accent-foreground: var(--color-paper);
+  --color-destructive: #d97757;
+  --color-border: var(--color-line-strong);
+  --color-input: var(--color-line);
+  --color-ring: var(--color-paper-muted);
+
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 999px;
+}
+
+:root {
+  --radius: 4px;
+  --background: var(--color-ink);
+  --foreground: var(--color-paper);
+  --card: var(--color-ink);
+  --card-foreground: var(--color-paper);
+  --popover: #141414;
+  --popover-foreground: var(--color-paper);
+  --primary: var(--color-paper);
+  --primary-foreground: var(--color-ink);
+  --secondary: #141414;
+  --secondary-foreground: var(--color-paper);
+  --muted: #141414;
+  --muted-foreground: var(--color-paper-muted);
+  --accent: #141414;
+  --accent-foreground: var(--color-paper);
+  --destructive: #d97757;
+  --border: var(--color-line-strong);
+  --input: var(--color-line);
+  --ring: var(--color-paper-muted);
 }
 
 * {
@@ -19,102 +74,68 @@
 }
 
 html, body {
-  background: var(--color-aubergine-deep);
-  color: var(--color-cream);
-  font-family: var(--font-body);
+  background: var(--color-ink);
+  color: var(--color-paper);
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "kern", "liga", "calt";
 }
 
 body {
-  background:
-    radial-gradient(ellipse at 20% 0%, rgba(255, 61, 139, 0.18) 0%, transparent 55%),
-    radial-gradient(ellipse at 80% 100%, rgba(255, 107, 53, 0.14) 0%, transparent 55%),
-    linear-gradient(180deg, var(--color-aubergine-deep) 0%, var(--color-aubergine) 100%);
-  background-attachment: fixed;
   min-height: 100vh;
-  position: relative;
-}
-
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.18 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
-  opacity: 0.35;
-  mix-blend-mode: overlay;
-  pointer-events: none;
-  z-index: 1;
+  letter-spacing: -0.005em;
 }
 
 ::selection {
-  background: var(--color-magenta);
-  color: var(--color-cream);
+  background: var(--color-paper);
+  color: var(--color-ink);
 }
 
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: var(--color-aubergine-deep); }
-::-webkit-scrollbar-thumb { background: rgba(254, 243, 226, 0.15); border-radius: 3px; }
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-line-strong); border-radius: 2px; }
 
-@keyframes twinkle {
-  0%, 100% { opacity: 0.15; transform: scale(0.9); }
-  50% { opacity: 0.95; transform: scale(1.1); }
-}
-.star {
-  position: absolute;
-  background: var(--color-cream);
-  border-radius: 50%;
-  pointer-events: none;
-  animation: twinkle 4s ease-in-out infinite;
-  filter: blur(0.3px);
+/* native pickers — match dark theme */
+input[type="date"],
+input[type="time"] {
+  color-scheme: dark;
 }
 
-@keyframes shimmer {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
-}
-.shimmer-cta {
-  position: relative;
-  overflow: hidden;
-  background:
-    linear-gradient(135deg, var(--color-saffron) 0%, var(--color-magenta) 100%);
-  box-shadow:
-    0 0 30px rgba(255, 61, 139, 0.35),
-    0 0 60px rgba(255, 107, 53, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
-}
-.shimmer-cta::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    100deg,
-    transparent 30%,
-    rgba(255, 255, 255, 0.25) 50%,
-    transparent 70%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 2.8s linear infinite;
-  pointer-events: none;
+/* tiny tracked caps label (used very sparingly) */
+.label-meta {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--color-paper-faint);
 }
 
+/* serif italic — the ONE moment of drama */
+.serif-italic {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-feature-settings: "kern", "liga", "calt", "ss01";
+  letter-spacing: -0.01em;
+}
+
+/* float-in animation, near-invisible */
 @keyframes float-in {
-  from { opacity: 0; transform: translateY(14px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 .float-in {
   opacity: 0;
-  animation: float-in 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  animation: float-in 0.7s ease forwards;
 }
 .float-in-1 { animation-delay: 0.05s; }
-.float-in-2 { animation-delay: 0.20s; }
-.float-in-3 { animation-delay: 0.40s; }
-.float-in-4 { animation-delay: 0.60s; }
-.float-in-5 { animation-delay: 0.80s; }
+.float-in-2 { animation-delay: 0.18s; }
+.float-in-3 { animation-delay: 0.32s; }
+.float-in-4 { animation-delay: 0.46s; }
+.float-in-5 { animation-delay: 0.60s; }
 
-.text-gradient-warm {
-  background: linear-gradient(135deg, var(--color-gold) 0%, var(--color-saffron) 45%, var(--color-magenta) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+@layer base {
+  body {
+    @apply bg-background text-foreground;
+  }
 }
