@@ -9,7 +9,7 @@ import type { DailyVibe, VibeCheckRequest } from "@/types/vedic";
 type State =
   | { kind: "form" }
   | { kind: "loading" }
-  | { kind: "result"; vibe: DailyVibe }
+  | { kind: "result"; vibe: DailyVibe; birth: VibeCheckRequest }
   | { kind: "error"; msg: string };
 
 export default function VibePage() {
@@ -28,7 +28,7 @@ export default function VibePage() {
         setState({ kind: "error", msg: j.error ?? "the cosmos timed out. try again?" });
         return;
       }
-      setState({ kind: "result", vibe: j.vibe });
+      setState({ kind: "result", vibe: j.vibe, birth: payload });
     } catch (e) {
       setState({ kind: "error", msg: (e as Error).message ?? "network glitch. try again?" });
     }
@@ -47,7 +47,7 @@ export default function VibePage() {
         {state.kind === "form" && <FormState onSubmit={handleSubmit} />}
         {state.kind === "loading" && <LoadingState />}
         {state.kind === "result" && (
-          <VibeResult vibe={state.vibe} onReset={() => setState({ kind: "form" })} />
+          <VibeResult vibe={state.vibe} birth={state.birth} onReset={() => setState({ kind: "form" })} />
         )}
         {state.kind === "error" && (
           <ErrorState msg={state.msg} onRetry={() => setState({ kind: "form" })} />

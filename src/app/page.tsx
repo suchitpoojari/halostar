@@ -20,15 +20,19 @@ export default function Home() {
           actually talk.
         </p>
 
-        <div className="float-in float-in-4 mt-14">
+        <div className="float-in float-in-4 mt-14 flex flex-col gap-4">
           <Link
             href="/vibe"
-            className="
-              group inline-flex items-center gap-2 text-base text-paper
-              transition hover:text-paper/80
-            "
+            className="group inline-flex w-fit items-center gap-2 text-base text-paper transition hover:text-paper/80"
           >
             <span>read today&rsquo;s horoscope</span>
+            <span className="transition-transform group-hover:translate-x-1">→</span>
+          </Link>
+          <Link
+            href="/match"
+            className="group inline-flex w-fit items-center gap-2 text-base text-paper-muted transition hover:text-paper"
+          >
+            <span>compatibility check</span>
             <span className="transition-transform group-hover:translate-x-1">→</span>
           </Link>
         </div>

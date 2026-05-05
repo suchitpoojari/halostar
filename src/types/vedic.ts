@@ -14,9 +14,7 @@ export interface BirthData {
 }
 
 export interface GeoPlace {
-  /** human-readable display name from Nominatim */
   display_name: string;
-  /** short label suitable for UI, e.g. "Mumbai, Maharashtra, India" */
   label: string;
   lat: number;
   lon: number;
@@ -92,7 +90,6 @@ export interface MoonSign {
 
 export interface MahaDasha {
   mahadasha: string[];
-  /** end-of-dasha dates (per developer_note) */
   mahadasha_order: string[];
   start_year: number;
   dasha_start_date: string;
@@ -101,15 +98,12 @@ export interface MahaDasha {
 
 export interface CurrentDasha {
   planet: string;
-  /** ISO date when this maha-dasha started */
   startDate: string;
-  /** ISO date when this maha-dasha ends */
   endDate: string;
-  /** remaining time human-readable e.g. "3 years 4 months" */
   remaining: string;
 }
 
-// --- birth chart ---
+// --- birth chart planets ---
 
 export interface PlanetPosition {
   name: string;
@@ -128,8 +122,8 @@ export interface PlanetPosition {
 // --- doshas ---
 
 export interface MangalDosha {
-  factors: Record<string, string>;
-  is_present: boolean;
+  factors?: Record<string, string>;
+  is_present?: boolean;
   is_dosha_present?: boolean;
   bot_response?: string;
   description?: string;
@@ -141,7 +135,6 @@ export interface AshtakootKoot {
   name: string;
   description: string;
   full_score: number;
-  /** numeric score earned */
   score: number;
   details: Record<string, string | number>;
 }
@@ -162,16 +155,13 @@ export interface AshtakootResult {
   };
 }
 
-// --- daily vibe (halostar internal shape, returned from /api/vibe-check) ---
+// --- daily vibe (free) ---
 
 export interface DailyVibe {
-  /** the one-line vibe for today */
   oneLiner: string;
-  /** the 3 micro-predictions */
   career: string;
   love: string;
   money: string;
-  /** raw vedic reference shown alongside */
   reference: {
     nakshatra: string;
     nakshatraLord: string;
@@ -179,11 +169,13 @@ export interface DailyVibe {
     moonSign: string;
     currentDasha: string;
   };
-  /** ISO date for which this vibe was generated */
   forDate: string;
+  /**
+   * Optional: when present, the original birth data, so the unlock flow
+   * can re-run the chart calc for the longer 90-day PDF without asking again.
+   */
+  birth?: BirthData;
 }
-
-// --- vibe-check API request body ---
 
 export interface VibeCheckRequest {
   dob: string;
@@ -194,8 +186,76 @@ export interface VibeCheckRequest {
   place: string;
 }
 
-// --- raw vedicastroapi envelope ---
+// --- compatibility (free) ---
+
+export interface CompatibilityVibe {
+  matchPercent: number;
+  pillars: {
+    vibeSync: { score: number; line: string };
+    communication: { score: number; line: string };
+    longGame: { score: number; line: string };
+  };
+  verdict: string;
+  reference: {
+    boyMoonSign: string;
+    girlMoonSign: string;
+    ashtakootRaw: number;
+  };
+}
+
+export interface MatchRequest {
+  boy: VibeCheckRequest;
+  girl: VibeCheckRequest;
+}
+
+// --- razorpay ---
+
+export interface RazorpayOrderRequest {
+  /** product key on our end */
+  product: "daily_vibe_unlock" | "compatibility_unlock";
+  /** user's email for receipt + PDF delivery */
+  email: string;
+  /** the input payload that produced the free reading; we re-run for the PDF */
+  payload:
+    | { kind: "daily_vibe"; birth: VibeCheckRequest }
+    | { kind: "compatibility"; boy: VibeCheckRequest; girl: VibeCheckRequest };
+}
+
+export interface RazorpayOrderResponse {
+  ok: true;
+  orderId: string;
+  amount: number;
+  currency: "INR";
+  keyId: string;
+  productLabel: string;
+}
+
+export interface RazorpayVerifyRequest {
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+  product: "daily_vibe_unlock" | "compatibility_unlock";
+  email: string;
+  payload:
+    | { kind: "daily_vibe"; birth: VibeCheckRequest }
+    | { kind: "compatibility"; boy: VibeCheckRequest; girl: VibeCheckRequest };
+}
 
 export type VedicEnvelope<T> =
   | { status: 200; response: T; remaining_api_calls?: number }
   | { status: 400; response: string; remaining_api_calls?: number };
+
+// --- pricing (single source of truth) ---
+
+export const PRICING = {
+  daily_vibe_unlock: {
+    amountInPaise: 1900,
+    label: "90-Day Dasha Reading",
+    blurb: "the next 90 days, mapped — your current mahadasha, weekly tilts, what to ship, what to wait on. one PDF, lifetime yours.",
+  },
+  compatibility_unlock: {
+    amountInPaise: 19900,
+    label: "Full Compatibility Report",
+    blurb: "all 8 koots broken down. mangal + nadi check. marriage timing window. fight-without-breakup decoder. one PDF.",
+  },
+} as const;
