@@ -1,32 +1,39 @@
 import { Document, Page, Text, View } from "@react-pdf/renderer";
 import { styles } from "./styles";
-import type { MatchPdfContent } from "@/lib/prompts/match-pdf";
+import type { CompatibilityDetailed } from "@/types/vedic";
 
 interface Props {
-  content: MatchPdfContent;
+  content: CompatibilityDetailed;
   boyLabel: string;
   girlLabel: string;
   ashtakootRaw: number;
   generatedDateLabel: string;
 }
 
-export function MatchProPdf({ content, boyLabel, girlLabel, ashtakootRaw, generatedDateLabel }: Props) {
+export function MatchProPdf({
+  content,
+  boyLabel,
+  girlLabel,
+  ashtakootRaw,
+  generatedDateLabel,
+}: Props) {
   return (
-    <Document title="halostar — Full Compatibility Report" author="halostar">
+    <Document title="halostar — Full Compatibility, Unlocked" author="halostar">
       {/* COVER */}
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
           <Text style={styles.wordmark}>halostar</Text>
-          <Text style={styles.meta}>full compatibility report</Text>
+          <Text style={styles.meta}>full compatibility · unlocked</Text>
         </View>
 
         <View style={{ flex: 1, justifyContent: "center" }}>
           <Text style={styles.meta}>For</Text>
           <Text style={[styles.body, { fontSize: 12 }]}>{boyLabel}</Text>
-          <Text style={[styles.body, { fontSize: 12, marginBottom: 32 }]}>&nbsp;&nbsp;&amp; {girlLabel}</Text>
+          <Text style={[styles.body, { fontSize: 12, marginBottom: 32 }]}>
+            &nbsp;&nbsp;&amp; {girlLabel}
+          </Text>
 
           <Text style={styles.title}>{content.title}</Text>
-          <Text style={styles.subtitle}>{content.headline}</Text>
 
           <View style={styles.hr} />
 
@@ -43,8 +50,28 @@ export function MatchProPdf({ content, boyLabel, girlLabel, ashtakootRaw, genera
         </View>
       </Page>
 
-      {/* ASHTAKOOT BREAKDOWN — split into 2 pages, 4 koots each */}
-      {chunk(content.ashtakootBreakdown, 4).map((group, pi) => (
+      {/* INTRO */}
+      <Page size="A4" style={styles.page}>
+        <View style={styles.header}>
+          <Text style={styles.wordmark}>halostar</Text>
+          <Text style={styles.meta}>opening</Text>
+        </View>
+
+        <Text style={styles.sectionLabel}>The Two Of You</Text>
+        {content.intro.split(/\n\n+/).map((para, i) => (
+          <Text key={i} style={styles.serifBody}>
+            {para.trim()}
+          </Text>
+        ))}
+
+        <View style={styles.pageFooter}>
+          <Text>halostar.in</Text>
+          <Text>opening · 2</Text>
+        </View>
+      </Page>
+
+      {/* KOOTS — 4 per page */}
+      {chunk(content.koots, 4).map((group, pi) => (
         <Page key={`koot-${pi}`} size="A4" style={styles.page}>
           <View style={styles.header}>
             <Text style={styles.wordmark}>halostar</Text>
@@ -52,94 +79,93 @@ export function MatchProPdf({ content, boyLabel, girlLabel, ashtakootRaw, genera
           </View>
 
           {group.map((k) => (
-            <View key={k.koot} style={{ marginBottom: 22 }} wrap={false}>
+            <View key={k.name} style={{ marginBottom: 22 }} wrap={false}>
               <View style={styles.weekHeader}>
-                <Text style={styles.weekNumber}>{k.koot}</Text>
-                <Text style={styles.weekDate}>{k.scoreLabel}</Text>
+                <Text style={styles.weekNumber}>{k.name}</Text>
+                <Text style={styles.weekDate}>
+                  {k.score} / {k.outOf}
+                </Text>
               </View>
-              <Text style={styles.weekHeadline}>{k.title}</Text>
-              <Text style={styles.serifBody}>{k.explanation}</Text>
+              <Text style={styles.serifBody}>{k.read}</Text>
             </View>
           ))}
 
           <View style={styles.pageFooter}>
             <Text>halostar.in</Text>
-            <Text>koots · {pi + 2}</Text>
+            <Text>koots · {pi + 3}</Text>
           </View>
         </Page>
       ))}
 
-      {/* DOSHA + TIMING */}
+      {/* DOSHA + LONG GAME */}
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
           <Text style={styles.wordmark}>halostar</Text>
-          <Text style={styles.meta}>dosha · timing</Text>
+          <Text style={styles.meta}>dosha · long game</Text>
         </View>
 
-        <Text style={styles.sectionLabel}>Dosha Check</Text>
-        <Text style={styles.serifBody}>{content.doshaCheck.summary}</Text>
-        <Text style={styles.sectionLabel}>Mangal</Text>
-        <Text style={styles.body}>{content.doshaCheck.mangalNote}</Text>
-        <Text style={styles.sectionLabel}>Nadi</Text>
-        <Text style={styles.body}>{content.doshaCheck.nadiNote}</Text>
+        <Text style={styles.sectionLabel}>Mangal Check</Text>
+        <Text style={styles.serifBody}>{content.mangal}</Text>
+
+        <Text style={styles.sectionLabel}>Nadi Check</Text>
+        <Text style={styles.serifBody}>{content.nadi}</Text>
 
         <View style={styles.hr} />
 
-        <Text style={styles.sectionLabel}>Marriage Timing Window</Text>
-        <Text style={styles.subtitle}>{content.marriageTimingWindow.headline}</Text>
-        <Text style={styles.serifBody}>{content.marriageTimingWindow.body}</Text>
+        <Text style={styles.sectionLabel}>The Long Game</Text>
+        <Text style={styles.serifBody}>{content.longGame}</Text>
 
         <View style={styles.pageFooter}>
           <Text>halostar.in</Text>
-          <Text>dosha · timing</Text>
+          <Text>dosha · long game</Text>
         </View>
       </Page>
 
-      {/* FIGHT DECODER */}
+      {/* FIGHT DECODER + PRACTICES */}
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
           <Text style={styles.wordmark}>halostar</Text>
-          <Text style={styles.meta}>fight without breakup</Text>
+          <Text style={styles.meta}>fight + repair</Text>
         </View>
 
-        <Text style={styles.subtitle}>{content.fightDecoder.headline}</Text>
-        <Text style={styles.serifBody}>{content.fightDecoder.intro}</Text>
+        <Text style={styles.sectionLabel}>Fight Without Breakup</Text>
+        <Text style={styles.serifBody}>{content.fightDecoder}</Text>
 
         <View style={styles.hr} />
 
-        {content.fightDecoder.patterns.map((p, i) => (
-          <View key={i} style={{ marginBottom: 18 }} wrap={false}>
-            <Text style={styles.sectionLabel}>Pattern {i + 1} · trigger</Text>
-            <Text style={styles.body}>{p.trigger}</Text>
-            <Text style={styles.sectionLabel}>spiral</Text>
-            <Text style={styles.body}>{p.spiral}</Text>
-            <Text style={styles.sectionLabel}>de-escalation</Text>
-            <Text style={styles.body}>{p.deescalation}</Text>
+        <Text style={styles.sectionLabel}>Practices</Text>
+        {content.practices.map((p, i) => (
+          <View key={i} style={styles.callout}>
+            <Text style={styles.body}>{p}</Text>
           </View>
         ))}
 
         <View style={styles.pageFooter}>
           <Text>halostar.in</Text>
-          <Text>fight decoder</Text>
+          <Text>fight · practices</Text>
         </View>
       </Page>
 
-      {/* VERDICT */}
+      {/* MARRIAGE WINDOW + CLOSE */}
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
           <Text style={styles.wordmark}>halostar</Text>
-          <Text style={styles.meta}>verdict</Text>
+          <Text style={styles.meta}>timing · close</Text>
         </View>
 
         <View style={{ flex: 1, justifyContent: "center" }}>
-          <Text style={styles.sectionLabel}>The Read</Text>
-          <Text style={styles.title}>{content.verdict.headline}</Text>
-          <Text style={styles.serifBody}>{content.verdict.body}</Text>
+          <Text style={styles.sectionLabel}>If You&rsquo;re Considering Marriage</Text>
+          <Text style={styles.serifBody}>{content.marriageWindow}</Text>
+
+          <View style={styles.hr} />
+
+          <Text style={styles.sectionLabel}>Closing Note</Text>
+          <Text style={styles.serifBody}>{content.closingNote}</Text>
         </View>
 
         <View style={styles.pageFooter}>
-          <Text>halostar.in · written for you</Text>
-          <Text>verdict</Text>
+          <Text>halostar.in · written for the two of you</Text>
+          <Text>close</Text>
         </View>
       </Page>
     </Document>

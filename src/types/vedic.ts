@@ -155,13 +155,29 @@ export interface AshtakootResult {
   };
 }
 
-// --- daily vibe (free) ---
+// --- daily vibe (free overview) ---
+
+export type DailyVibeSegmentKey =
+  | "love"
+  | "relationships"
+  | "work"
+  | "finance"
+  | "health"
+  | "mindset";
+
+export interface DailyVibeOverview {
+  love: string;          // 1 sentence
+  relationships: string; // 1 sentence (family / friends / chosen people — distinct from romantic love)
+  work: string;          // 1 sentence (career / college / study)
+  finance: string;       // 1 sentence (money / spending / abundance)
+  health: string;        // 1 sentence (body / energy / sleep)
+  mindset: string;       // 1 sentence (inner state / mood / focus)
+}
 
 export interface DailyVibe {
   oneLiner: string;
-  career: string;
-  love: string;
-  money: string;
+  forDate: string;
+  overview: DailyVibeOverview;
   reference: {
     nakshatra: string;
     nakshatraLord: string;
@@ -169,12 +185,34 @@ export interface DailyVibe {
     moonSign: string;
     currentDasha: string;
   };
-  forDate: string;
-  /**
-   * Optional: when present, the original birth data, so the unlock flow
-   * can re-run the chart calc for the longer 90-day PDF without asking again.
-   */
-  birth?: BirthData;
+}
+
+// --- daily vibe (paid: fully detailed, revealed inline) ---
+
+export interface DailyVibeDetailedSection {
+  /** 3–5 sentence expansion of this segment's overview line. specific, actionable. */
+  detail: string;
+  /** 2–4 do-this-today tilts. each <= 18 words. */
+  moves: string[];
+}
+
+export interface DailyVibeDetailed {
+  /** the deeper headline that introduces the full reading. */
+  title: string;
+  /** 3–5 sentence opening that sets up today's energy in detail. */
+  intro: string;
+  sections: {
+    love: DailyVibeDetailedSection;
+    relationships: DailyVibeDetailedSection;
+    work: DailyVibeDetailedSection;
+    finance: DailyVibeDetailedSection;
+    health: DailyVibeDetailedSection;
+    mindset: DailyVibeDetailedSection;
+  };
+  luckyWindow: string;     // "best 2–3 hour window today, in halostar voice"
+  avoidWindow: string;     // "the cursed window — when to lay low"
+  mantra: string;          // a 1-line affirmation in halostar voice. lowercase.
+  closingNote: string;     // 2–3 sentence sign-off.
 }
 
 export interface VibeCheckRequest {
@@ -186,7 +224,7 @@ export interface VibeCheckRequest {
   place: string;
 }
 
-// --- compatibility (free) ---
+// --- compatibility (free overview) ---
 
 export interface CompatibilityVibe {
   matchPercent: number;
@@ -203,6 +241,39 @@ export interface CompatibilityVibe {
   };
 }
 
+// --- compatibility (paid: fully detailed) ---
+
+export interface CompatibilityKootDetail {
+  /** koot name as in vedic, e.g. "varna" */
+  name: string;
+  /** raw score we already have, displayed prominently */
+  score: number;
+  outOf: number;
+  /** 2–3 sentence read on what this score means for *this couple*. */
+  read: string;
+}
+
+export interface CompatibilityDetailed {
+  title: string;
+  /** 3–5 sentence intro framing the match in halostar voice. */
+  intro: string;
+  /** all 8 koots, one paragraph each. order: varna, vasya, tara, yoni, grahamaitri, gana, bhakoot, nadi */
+  koots: CompatibilityKootDetail[];
+  /** mangal dosha read for both partners. <= 4 sentences. */
+  mangal: string;
+  /** nadi check explained for laypeople. <= 3 sentences. */
+  nadi: string;
+  /** 3–5 sentences on how this couple fights and how to repair. */
+  fightDecoder: string;
+  /** 2–3 sentences on where this is headed if both lean in. */
+  longGame: string;
+  /** 3–4 actionable practices for the couple. each <= 20 words. */
+  practices: string[];
+  /** "if you're considering marriage" timing window read. <= 3 sentences. */
+  marriageWindow: string;
+  closingNote: string;
+}
+
 export interface MatchRequest {
   boy: VibeCheckRequest;
   girl: VibeCheckRequest;
@@ -210,15 +281,16 @@ export interface MatchRequest {
 
 // --- razorpay ---
 
+export type UnlockProduct = "daily_vibe_unlock" | "compatibility_unlock";
+
+export type UnlockPayload =
+  | { kind: "daily_vibe"; birth: VibeCheckRequest }
+  | { kind: "compatibility"; boy: VibeCheckRequest; girl: VibeCheckRequest };
+
 export interface RazorpayOrderRequest {
-  /** product key on our end */
-  product: "daily_vibe_unlock" | "compatibility_unlock";
-  /** user's email for receipt + PDF delivery */
+  product: UnlockProduct;
   email: string;
-  /** the input payload that produced the free reading; we re-run for the PDF */
-  payload:
-    | { kind: "daily_vibe"; birth: VibeCheckRequest }
-    | { kind: "compatibility"; boy: VibeCheckRequest; girl: VibeCheckRequest };
+  payload: UnlockPayload;
 }
 
 export interface RazorpayOrderResponse {
@@ -234,12 +306,25 @@ export interface RazorpayVerifyRequest {
   razorpay_order_id: string;
   razorpay_payment_id: string;
   razorpay_signature: string;
-  product: "daily_vibe_unlock" | "compatibility_unlock";
+  product: UnlockProduct;
   email: string;
-  payload:
-    | { kind: "daily_vibe"; birth: VibeCheckRequest }
-    | { kind: "compatibility"; boy: VibeCheckRequest; girl: VibeCheckRequest };
+  payload: UnlockPayload;
 }
+
+export type RazorpayVerifyResponse =
+  | {
+      ok: true;
+      product: "daily_vibe_unlock";
+      detailed: DailyVibeDetailed;
+      emailDelivered: boolean;
+    }
+  | {
+      ok: true;
+      product: "compatibility_unlock";
+      detailed: CompatibilityDetailed;
+      emailDelivered: boolean;
+    }
+  | { ok: false; error: string };
 
 export type VedicEnvelope<T> =
   | { status: 200; response: T; remaining_api_calls?: number }
@@ -250,12 +335,16 @@ export type VedicEnvelope<T> =
 export const PRICING = {
   daily_vibe_unlock: {
     amountInPaise: 1900,
-    label: "90-Day Dasha Reading",
-    blurb: "the next 90 days, mapped — your current mahadasha, weekly tilts, what to ship, what to wait on. one PDF, lifetime yours.",
+    label: "Today, Fully Unlocked",
+    blurb:
+      "every segment of today's chart, expanded — love, work, money, body, mind. plus your lucky window, avoid window, and a mantra you can actually use.",
+    cta: "unlock today for ₹19",
   },
   compatibility_unlock: {
-    amountInPaise: 19900,
-    label: "Full Compatibility Report",
-    blurb: "all 8 koots broken down. mangal + nadi check. marriage timing window. fight-without-breakup decoder. one PDF.",
+    amountInPaise: 9900,
+    label: "Full Compatibility, Unlocked",
+    blurb:
+      "all 8 koots, broken down. mangal + nadi check. how you two fight, how to repair, marriage timing window — the whole read.",
+    cta: "unlock the full read for ₹99",
   },
 } as const;

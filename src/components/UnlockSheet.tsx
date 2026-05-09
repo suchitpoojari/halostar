@@ -12,10 +12,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   PRICING,
-  type RazorpayOrderResponse,
+  type CompatibilityDetailed,
+  type DailyVibeDetailed,
   type RazorpayOrderRequest,
+  type RazorpayOrderResponse,
   type RazorpayVerifyRequest,
-  type VibeCheckRequest,
+  type UnlockPayload,
+  type UnlockProduct,
 } from "@/types/vedic";
 
 declare global {
@@ -33,21 +36,25 @@ interface RazorpayOptions {
   description: string;
   prefill?: { email?: string };
   theme?: { color?: string };
-  handler: (resp: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => void;
+  handler: (resp: {
+    razorpay_payment_id: string;
+    razorpay_order_id: string;
+    razorpay_signature: string;
+  }) => void;
   modal?: { ondismiss?: () => void };
 }
 
-type Product = "daily_vibe_unlock" | "compatibility_unlock";
-
-type Payload =
-  | { kind: "daily_vibe"; birth: VibeCheckRequest }
-  | { kind: "compatibility"; boy: VibeCheckRequest; girl: VibeCheckRequest };
+type UnlockResult =
+  | { product: "daily_vibe_unlock"; detailed: DailyVibeDetailed }
+  | { product: "compatibility_unlock"; detailed: CompatibilityDetailed };
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  product: Product;
-  payload: Payload;
+  product: UnlockProduct;
+  payload: UnlockPayload;
+  /** fired the moment payment + content generation completes — caller reveals the detailed read inline. */
+  onUnlocked: (result: UnlockResult) => void;
 }
 
 type State =
@@ -55,16 +62,14 @@ type State =
   | { kind: "creating-order" }
   | { kind: "razorpay-open" }
   | { kind: "verifying" }
-  | { kind: "done"; emailDelivered: boolean; pdfBase64: string; pdfFilename: string }
   | { kind: "error"; msg: string };
 
-export function UnlockSheet({ open, onOpenChange, product, payload }: Props) {
+export function UnlockSheet({ open, onOpenChange, product, payload, onUnlocked }: Props) {
   const [email, setEmail] = useState("");
   const [state, setState] = useState<State>({ kind: "idle" });
   const pricing = PRICING[product];
   const amountRupees = pricing.amountInPaise / 100;
 
-  // load razorpay checkout script lazily once the sheet opens
   useEffect(() => {
     if (!open) return;
     if (typeof window === "undefined") return;
@@ -75,7 +80,6 @@ export function UnlockSheet({ open, onOpenChange, product, payload }: Props) {
     document.body.appendChild(s);
   }, [open]);
 
-  // reset state when closing
   useEffect(() => {
     if (!open) {
       setState({ kind: "idle" });
@@ -99,12 +103,14 @@ export function UnlockSheet({ open, onOpenChange, product, payload }: Props) {
       });
       const order = (await r.json()) as RazorpayOrderResponse | { ok: false; error: string };
       if (!r.ok || !("orderId" in order)) {
-        setState({ kind: "error", msg: ("error" in order && order.error) || "couldn't create order" });
+        setState({
+          kind: "error",
+          msg: ("error" in order && order.error) || "couldn't create order",
+        });
         return;
       }
 
       if (!window.Razorpay) {
-        // poll briefly for script load
         for (let i = 0; i < 30; i++) {
           await new Promise((r) => setTimeout(r, 100));
           if (window.Razorpay) break;
@@ -143,20 +149,38 @@ export function UnlockSheet({ open, onOpenChange, product, payload }: Props) {
               body: JSON.stringify(verifyReq),
             });
             const vj = (await vr.json()) as
-              | { ok: true; emailDelivered: boolean; pdfBase64: string; pdfFilename: string }
+              | {
+                  ok: true;
+                  product: "daily_vibe_unlock";
+                  detailed: DailyVibeDetailed;
+                  emailDelivered: boolean;
+                }
+              | {
+                  ok: true;
+                  product: "compatibility_unlock";
+                  detailed: CompatibilityDetailed;
+                  emailDelivered: boolean;
+                }
               | { ok: false; error: string };
             if (!vr.ok || !vj.ok) {
-              setState({ kind: "error", msg: ("error" in vj && vj.error) || "verification failed" });
+              setState({
+                kind: "error",
+                msg: ("error" in vj && vj.error) || "verification failed",
+              });
               return;
             }
-            setState({
-              kind: "done",
-              emailDelivered: vj.emailDelivered,
-              pdfBase64: vj.pdfBase64,
-              pdfFilename: vj.pdfFilename,
-            });
+            // hand the detailed read to the parent — the parent reveals it inline.
+            if (vj.product === "daily_vibe_unlock") {
+              onUnlocked({ product: "daily_vibe_unlock", detailed: vj.detailed });
+            } else {
+              onUnlocked({ product: "compatibility_unlock", detailed: vj.detailed });
+            }
+            onOpenChange(false);
           } catch (err) {
-            setState({ kind: "error", msg: (err as Error).message ?? "verification failed" });
+            setState({
+              kind: "error",
+              msg: (err as Error).message ?? "verification failed",
+            });
           }
         },
         modal: {
@@ -171,96 +195,58 @@ export function UnlockSheet({ open, onOpenChange, product, payload }: Props) {
     }
   }
 
-  function downloadPdf() {
-    if (state.kind !== "done") return;
-    const link = document.createElement("a");
-    link.href = `data:application/pdf;base64,${state.pdfBase64}`;
-    link.download = state.pdfFilename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="border-line-strong bg-popover text-paper sm:max-w-md">
-        {state.kind === "done" ? (
-          <DoneState state={state} onDownload={downloadPdf} email={email} />
-        ) : (
-          <>
-            <DialogHeader>
-              <DialogTitle className="serif-italic text-2xl text-paper">{pricing.label}</DialogTitle>
-              <DialogDescription className="text-paper-muted">
-                {pricing.blurb}
-              </DialogDescription>
-            </DialogHeader>
+        <DialogHeader>
+          <DialogTitle className="serif-italic text-2xl text-paper">
+            {pricing.label}
+          </DialogTitle>
+          <DialogDescription className="text-paper-muted">
+            {pricing.blurb}
+          </DialogDescription>
+        </DialogHeader>
 
-            <form onSubmit={handlePay} className="mt-4 flex flex-col gap-6">
-              <div className="flex flex-col gap-2">
-                <Label className="label-meta">Email for delivery</Label>
-                <Input
-                  type="email"
-                  required
-                  placeholder="your@email.in"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={state.kind !== "idle" && state.kind !== "error"}
-                  className="h-11 rounded-none border-x-0 border-t-0 border-b border-line-strong bg-transparent px-0 text-base text-paper placeholder:text-paper-faint focus-visible:border-paper focus-visible:ring-0"
-                />
-              </div>
+        <form onSubmit={handlePay} className="mt-4 flex flex-col gap-6">
+          <div className="flex flex-col gap-2">
+            <Label className="label-meta">Email for receipt + keepsake PDF</Label>
+            <Input
+              type="email"
+              required
+              placeholder="your@email.in"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={state.kind !== "idle" && state.kind !== "error"}
+              className="h-11 rounded-none border-x-0 border-t-0 border-b border-line-strong bg-transparent px-0 text-base text-paper placeholder:text-paper-faint focus-visible:border-paper focus-visible:ring-0"
+            />
+          </div>
 
-              {state.kind === "error" && (
-                <p role="alert" className="text-sm text-destructive">{state.msg}</p>
-              )}
+          {state.kind === "error" && (
+            <p role="alert" className="text-sm text-destructive">
+              {state.msg}
+            </p>
+          )}
 
-              <button
-                type="submit"
-                disabled={state.kind === "creating-order" || state.kind === "razorpay-open" || state.kind === "verifying"}
-                className="h-12 w-full bg-paper text-base font-medium tracking-tight text-ink transition hover:bg-paper/90 disabled:cursor-wait disabled:opacity-70"
-              >
-                {state.kind === "creating-order" && "preparing checkout..."}
-                {state.kind === "razorpay-open" && "complete payment..."}
-                {state.kind === "verifying" && "verifying & writing your reading..."}
-                {(state.kind === "idle" || state.kind === "error") && `pay ₹${amountRupees}`}
-              </button>
+          <button
+            type="submit"
+            disabled={
+              state.kind === "creating-order" ||
+              state.kind === "razorpay-open" ||
+              state.kind === "verifying"
+            }
+            className="h-12 w-full bg-paper text-base font-medium tracking-tight text-ink transition hover:bg-paper/90 disabled:cursor-wait disabled:opacity-70"
+          >
+            {state.kind === "creating-order" && "preparing checkout..."}
+            {state.kind === "razorpay-open" && "complete payment..."}
+            {state.kind === "verifying" && "writing your full read..."}
+            {(state.kind === "idle" || state.kind === "error") && `pay ₹${amountRupees}`}
+          </button>
 
-              <p className="text-center text-[11px] text-paper-faint">
-                payment via razorpay (UPI, card, netbanking). PDF emailed once payment clears.
-              </p>
-            </form>
-          </>
-        )}
+          <p className="text-center text-[11px] text-paper-faint">
+            payment via razorpay (UPI, card, netbanking). full read unlocks on this page right after.
+          </p>
+        </form>
       </DialogContent>
     </Dialog>
-  );
-}
-
-function DoneState({
-  state,
-  onDownload,
-  email,
-}: {
-  state: { kind: "done"; emailDelivered: boolean; pdfFilename: string };
-  onDownload: () => void;
-  email: string;
-}) {
-  return (
-    <div className="flex flex-col gap-6 py-2">
-      <DialogHeader>
-        <DialogTitle className="serif-italic text-2xl text-paper">your reading&rsquo;s ready ✦</DialogTitle>
-        <DialogDescription className="text-paper-muted">
-          {state.emailDelivered
-            ? `also sent to ${email}. check your inbox in 1–2 minutes.`
-            : `download below — we'll get it to your inbox once email infra ships.`}
-        </DialogDescription>
-      </DialogHeader>
-
-      <button
-        onClick={onDownload}
-        className="h-12 w-full bg-paper text-base font-medium tracking-tight text-ink transition hover:bg-paper/90"
-      >
-        download {state.pdfFilename} →
-      </button>
-    </div>
   );
 }

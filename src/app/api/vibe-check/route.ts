@@ -7,7 +7,12 @@ import {
   getPanchang,
 } from "@/lib/vedic";
 import { DAILY_VIBE_SYSTEM, buildDailyVibeUserPrompt } from "@/lib/prompts/daily-vibe";
-import type { BirthData, DailyVibe, VibeCheckRequest } from "@/types/vedic";
+import type {
+  BirthData,
+  DailyVibe,
+  DailyVibeOverview,
+  VibeCheckRequest,
+} from "@/types/vedic";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -65,20 +70,16 @@ export async function POST(req: Request) {
 
     const ai = await generateJson<{
       oneLiner: string;
-      career: string;
-      love: string;
-      money: string;
+      overview: DailyVibeOverview;
     }>(DAILY_VIBE_SYSTEM, userPrompt, {
       cacheSystem: true,
-      maxTokens: 600,
+      maxTokens: 900,
       temperature: 0.95,
     });
 
     const vibe: DailyVibe = {
       oneLiner: ai.oneLiner,
-      career: ai.career,
-      love: ai.love,
-      money: ai.money,
+      overview: ai.overview,
       reference: {
         nakshatra: panchang.nakshatra.name,
         nakshatraLord: panchang.nakshatra.lord,
