@@ -26,7 +26,9 @@ import { MatchProPdf } from "@/components/pdfs/MatchProPdf";
 import type {
   BirthData,
   CompatibilityDetailed,
+  CompatibilityKootDetail,
   DailyVibeDetailed,
+  DailyVibeDetailedSection,
   RazorpayVerifyRequest,
 } from "@/types/vedic";
 
@@ -41,7 +43,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "invalid body" }, { status: 400 });
   }
 
-  // 1. signature verification
+  // 1. signature verification — never skip
   const sigOk = verifyPaymentSignature({
     razorpay_order_id: body.razorpay_order_id,
     razorpay_payment_id: body.razorpay_payment_id,
@@ -55,37 +57,48 @@ export async function POST(req: Request) {
     );
   }
 
+  console.log("[razorpay/verify] signature ok", {
+    payment_id: body.razorpay_payment_id,
+    product: body.product,
+  });
+
   try {
     if (body.product === "daily_vibe_unlock" && body.payload.kind === "daily_vibe") {
-      const result = await generateDailyDetailed(body.payload.birth);
-      const emailDelivered = await tryEmailPdf({
+      const detailed = await generateDailyDetailed(body.payload.birth);
+
+      // PDF + email are bonuses — never let them block the unlock
+      const emailDelivered = await tryGenerateAndEmailDailyPdf({
+        detailed,
+        birth: body.payload.birth,
         to: body.email,
-        subject: result.emailSubject,
-        textBody: result.emailBody,
-        pdfBuffer: result.pdfBuffer,
-        pdfFilename: result.pdfFilename,
       });
+
       return NextResponse.json({
         ok: true,
         product: "daily_vibe_unlock" as const,
-        detailed: result.detailed,
+        detailed,
         emailDelivered,
       });
     }
 
     if (body.product === "compatibility_unlock" && body.payload.kind === "compatibility") {
-      const result = await generateCompatDetailed(body.payload.boy, body.payload.girl);
-      const emailDelivered = await tryEmailPdf({
+      const { detailed, ashtakootRaw } = await generateCompatDetailed(
+        body.payload.boy,
+        body.payload.girl
+      );
+
+      const emailDelivered = await tryGenerateAndEmailCompatPdf({
+        detailed,
+        boy: body.payload.boy,
+        girl: body.payload.girl,
+        ashtakootRaw,
         to: body.email,
-        subject: result.emailSubject,
-        textBody: result.emailBody,
-        pdfBuffer: result.pdfBuffer,
-        pdfFilename: result.pdfFilename,
       });
+
       return NextResponse.json({
         ok: true,
         product: "compatibility_unlock" as const,
-        detailed: result.detailed,
+        detailed,
         emailDelivered,
       });
     }
@@ -95,43 +108,32 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   } catch (e) {
-    console.error("[razorpay/verify] generation failed", e);
+    const errMsg = (e as Error)?.message ?? String(e);
+    const errStack = (e as Error)?.stack ?? "";
+    console.error(
+      "[razorpay/verify] generation failed",
+      JSON.stringify({
+        payment_id: body.razorpay_payment_id,
+        product: body.product,
+        error: errMsg,
+        stack: errStack.slice(0, 800),
+      })
+    );
     return NextResponse.json(
       {
         ok: false,
-        error:
-          "payment ok but generation broke. we'll fix this and email you within a few hours.",
+        error: `generation failed: ${errMsg.slice(0, 200)}`,
+        // payment_id surfaced so the user can hit /api/razorpay/recover with it after we fix
+        payment_id: body.razorpay_payment_id,
       },
       { status: 500 }
     );
   }
 }
 
-async function tryEmailPdf(args: {
-  to: string;
-  subject: string;
-  textBody: string;
-  pdfBuffer: Buffer;
-  pdfFilename: string;
-}): Promise<boolean> {
-  if (!process.env.RESEND_API_KEY) {
-    console.warn(
-      "[razorpay/verify] RESEND_API_KEY not set — skipping bonus email; user gets the read inline"
-    );
-    return false;
-  }
-  try {
-    await sendPdfEmail(args);
-    return true;
-  } catch (emailErr) {
-    console.error("[razorpay/verify] email send failed", emailErr);
-    return false;
-  }
-}
-
 // ----- daily vibe ₹19 → today's full unlocked horoscope -----
 
-async function generateDailyDetailed(birth: BirthData) {
+async function generateDailyDetailed(birth: BirthData): Promise<DailyVibeDetailed> {
   const today = new Date();
   const [panchang, moonSign, mahaDasha, planets] = await Promise.all([
     getPanchang(today, birth.lat, birth.lon, birth.tz),
@@ -150,42 +152,86 @@ async function generateDailyDetailed(birth: BirthData) {
     forDate: today,
   });
 
-  const detailed = await generateJson<DailyVibeDetailed>(
+  const raw = await generateJson<Partial<DailyVibeDetailed>>(
     DAILY_DETAILED_SYSTEM,
     userPrompt,
     {
-      model: MODELS.pdf,
+      // sonnet is faster + cheaper + plenty good at structured JSON
+      model: MODELS.voice,
       cacheSystem: true,
-      maxTokens: 6000,
+      maxTokens: 4000,
       temperature: 0.85,
     }
   );
 
-  const generatedDateLabel = today.toLocaleDateString("en-IN", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-  const currentDashaLabel = `${currentDasha.planet} mahadasha · ${currentDasha.remaining} remaining`;
+  return sanitizeDailyDetailed(raw);
+}
 
-  const pdfElement = React.createElement(DailyVibeProPdf, {
-    content: detailed,
-    birthLabel: `${birth.place} · ${birth.dob} at ${birth.tob}`,
-    currentDashaLabel,
-    generatedDateLabel,
+function sanitizeDailyDetailed(raw: Partial<DailyVibeDetailed>): DailyVibeDetailed {
+  const safeSection = (s: Partial<DailyVibeDetailedSection> | undefined): DailyVibeDetailedSection => ({
+    detail: typeof s?.detail === "string" ? s.detail : "the read came through partial — try the page again, it'll regenerate fresh.",
+    moves: Array.isArray(s?.moves) ? s.moves.filter((m): m is string => typeof m === "string") : [],
   });
-  const pdfBuffer = await renderToBuffer(
-    pdfElement as unknown as Parameters<typeof renderToBuffer>[0]
-  );
+
+  const sections = raw.sections ?? ({} as Partial<DailyVibeDetailed["sections"]>);
 
   return {
-    detailed,
-    pdfBuffer,
-    pdfFilename: `halostar-today-unlocked.pdf`,
-    emailSubject: `your halostar unlock — today, in full ✦`,
-    emailBody: `your full read for today is attached as a keepsake PDF.\n\nthe whole thing's already on the page — this is just for the archive.\n\n— halostar\nhalostar.in`,
+    title: typeof raw.title === "string" ? raw.title : "today, unlocked",
+    intro: typeof raw.intro === "string" ? raw.intro : "",
+    sections: {
+      love: safeSection(sections.love),
+      relationships: safeSection(sections.relationships),
+      work: safeSection(sections.work),
+      finance: safeSection(sections.finance),
+      health: safeSection(sections.health),
+      mindset: safeSection(sections.mindset),
+    },
+    luckyWindow: typeof raw.luckyWindow === "string" ? raw.luckyWindow : "",
+    avoidWindow: typeof raw.avoidWindow === "string" ? raw.avoidWindow : "",
+    mantra: typeof raw.mantra === "string" ? raw.mantra : "",
+    closingNote: typeof raw.closingNote === "string" ? raw.closingNote : "",
   };
+}
+
+async function tryGenerateAndEmailDailyPdf(args: {
+  detailed: DailyVibeDetailed;
+  birth: BirthData;
+  to: string;
+}): Promise<boolean> {
+  try {
+    const today = new Date();
+    const mahaDasha = await getMahaDasha(args.birth);
+    const currentDasha = computeCurrentDasha(mahaDasha, today);
+    const generatedDateLabel = today.toLocaleDateString("en-IN", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+    const currentDashaLabel = `${currentDasha.planet} mahadasha · ${currentDasha.remaining} remaining`;
+
+    const pdfElement = React.createElement(DailyVibeProPdf, {
+      content: args.detailed,
+      birthLabel: `${args.birth.place} · ${args.birth.dob} at ${args.birth.tob}`,
+      currentDashaLabel,
+      generatedDateLabel,
+    });
+    const pdfBuffer = await renderToBuffer(
+      pdfElement as unknown as Parameters<typeof renderToBuffer>[0]
+    );
+
+    return await tryEmailPdf({
+      to: args.to,
+      subject: `your halostar unlock — today, in full ✦`,
+      textBody: `your full read for today is attached as a keepsake PDF.\n\nthe whole thing's already on the page — this is just for the archive.\n\n— halostar\nhalostar.in`,
+      pdfBuffer,
+      pdfFilename: `halostar-today-unlocked.pdf`,
+    });
+  } catch (e) {
+    // PDF/email is bonus content — never let it break the unlock.
+    console.error("[razorpay/verify] daily PDF/email failed (non-fatal)", (e as Error).message);
+    return false;
+  }
 }
 
 // ----- compatibility ₹99 → fully detailed -----
@@ -211,40 +257,117 @@ async function generateCompatDetailed(boy: BirthData, girl: BirthData) {
     girlLabel: `${girl.place} · ${girl.dob}, ${girl.tob}`,
   });
 
-  const detailed = await generateJson<CompatibilityDetailed>(
+  const raw = await generateJson<Partial<CompatibilityDetailed>>(
     COMPAT_DETAILED_SYSTEM,
     userPrompt,
     {
-      model: MODELS.pdf,
+      model: MODELS.voice,
       cacheSystem: true,
-      maxTokens: 8000,
+      maxTokens: 5000,
       temperature: 0.85,
     }
   );
 
-  const generatedDateLabel = new Date().toLocaleDateString("en-IN", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  return { detailed: sanitizeCompatDetailed(raw), ashtakootRaw: ashtakoot.total };
+}
 
-  const pdfElement = React.createElement(MatchProPdf, {
-    content: detailed,
-    boyLabel: `${boy.place} · ${boy.dob} at ${boy.tob}`,
-    girlLabel: `${girl.place} · ${girl.dob} at ${girl.tob}`,
-    ashtakootRaw: ashtakoot.total,
-    generatedDateLabel,
+function sanitizeCompatDetailed(raw: Partial<CompatibilityDetailed>): CompatibilityDetailed {
+  const KOOT_ORDER = [
+    "varna",
+    "vasya",
+    "tara",
+    "yoni",
+    "grahamaitri",
+    "gana",
+    "bhakoot",
+    "nadi",
+  ] as const;
+
+  const koots = (raw.koots ?? []) as Partial<CompatibilityKootDetail>[];
+  const orderedKoots: CompatibilityKootDetail[] = KOOT_ORDER.map((name) => {
+    const k = koots.find((x) => x?.name === name);
+    return {
+      name,
+      score: typeof k?.score === "number" ? k.score : 0,
+      outOf:
+        typeof k?.outOf === "number"
+          ? k.outOf
+          : { varna: 1, vasya: 2, tara: 3, yoni: 4, grahamaitri: 5, gana: 6, bhakoot: 7, nadi: 8 }[name],
+      read: typeof k?.read === "string" ? k.read : "the read for this koot came through partial — try the page again.",
+    };
   });
-  const pdfBuffer = await renderToBuffer(
-    pdfElement as unknown as Parameters<typeof renderToBuffer>[0]
-  );
 
   return {
-    detailed,
-    pdfBuffer,
-    pdfFilename: `halostar-compatibility-unlocked.pdf`,
-    emailSubject: `your halostar unlock — compatibility, in full ✦`,
-    emailBody: `the full read is on the page — this attachment is the keepsake PDF.\n\nashtakoot ${ashtakoot.total}/36, all 8 koots, mangal + nadi, the works.\n\n— halostar\nhalostar.in`,
+    title: typeof raw.title === "string" ? raw.title : "the full compatibility read",
+    intro: typeof raw.intro === "string" ? raw.intro : "",
+    koots: orderedKoots,
+    mangal: typeof raw.mangal === "string" ? raw.mangal : "",
+    nadi: typeof raw.nadi === "string" ? raw.nadi : "",
+    fightDecoder: typeof raw.fightDecoder === "string" ? raw.fightDecoder : "",
+    longGame: typeof raw.longGame === "string" ? raw.longGame : "",
+    practices: Array.isArray(raw.practices)
+      ? raw.practices.filter((p): p is string => typeof p === "string")
+      : [],
+    marriageWindow: typeof raw.marriageWindow === "string" ? raw.marriageWindow : "",
+    closingNote: typeof raw.closingNote === "string" ? raw.closingNote : "",
   };
+}
+
+async function tryGenerateAndEmailCompatPdf(args: {
+  detailed: CompatibilityDetailed;
+  boy: BirthData;
+  girl: BirthData;
+  ashtakootRaw: number;
+  to: string;
+}): Promise<boolean> {
+  try {
+    const generatedDateLabel = new Date().toLocaleDateString("en-IN", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
+    const pdfElement = React.createElement(MatchProPdf, {
+      content: args.detailed,
+      boyLabel: `${args.boy.place} · ${args.boy.dob} at ${args.boy.tob}`,
+      girlLabel: `${args.girl.place} · ${args.girl.dob} at ${args.girl.tob}`,
+      ashtakootRaw: args.ashtakootRaw,
+      generatedDateLabel,
+    });
+    const pdfBuffer = await renderToBuffer(
+      pdfElement as unknown as Parameters<typeof renderToBuffer>[0]
+    );
+    return await tryEmailPdf({
+      to: args.to,
+      subject: `your halostar unlock — compatibility, in full ✦`,
+      textBody: `the full read is on the page — this attachment is the keepsake PDF.\n\nashtakoot ${args.ashtakootRaw}/36, all 8 koots, mangal + nadi, the works.\n\n— halostar\nhalostar.in`,
+      pdfBuffer,
+      pdfFilename: `halostar-compatibility-unlocked.pdf`,
+    });
+  } catch (e) {
+    console.error("[razorpay/verify] compat PDF/email failed (non-fatal)", (e as Error).message);
+    return false;
+  }
+}
+
+async function tryEmailPdf(args: {
+  to: string;
+  subject: string;
+  textBody: string;
+  pdfBuffer: Buffer;
+  pdfFilename: string;
+}): Promise<boolean> {
+  if (!process.env.RESEND_API_KEY) {
+    console.warn(
+      "[razorpay/verify] RESEND_API_KEY not set — skipping bonus email; user gets the read inline"
+    );
+    return false;
+  }
+  try {
+    await sendPdfEmail(args);
+    return true;
+  } catch (emailErr) {
+    console.error("[razorpay/verify] email send failed", (emailErr as Error).message);
+    return false;
+  }
 }
